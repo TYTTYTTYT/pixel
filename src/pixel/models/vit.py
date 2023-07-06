@@ -26,7 +26,13 @@ from torch import nn
 from transformers import ViTPreTrainedModel
 from transformers.modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling
 from transformers.modeling_utils import find_pruneable_heads_and_indices, prune_linear_layer
-from transformers.models.vit.modeling_vit import PatchEmbeddings, ViTIntermediate, ViTOutput, ViTPooler, ViTSelfOutput
+from transformers.models.vit.modeling_vit import (
+    ViTPatchEmbeddings as PatchEmbeddings, 
+    ViTIntermediate, 
+    ViTOutput, 
+    ViTPooler, 
+    ViTSelfOutput
+)
 
 logger = logging.getLogger(__name__)
 

@@ -37,7 +37,7 @@ from transformers import ViTPreTrainedModel
 from transformers.modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling, SequenceClassifierOutput
 from transformers.modeling_utils import find_pruneable_heads_and_indices, prune_linear_layer
 from transformers.models.vit.modeling_vit import (
-    PatchEmbeddings,
+    ViTPatchEmbeddings as PatchEmbeddings,
     ViTForImageClassification,
     ViTIntermediate,
     ViTOutput,

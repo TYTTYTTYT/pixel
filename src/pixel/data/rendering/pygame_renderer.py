@@ -10,7 +10,7 @@ from ...utils.defaults import *
 from .rendering_utils import TextRenderingMixin, Encoding
 
 os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
-import pygame.freetype
+# import pygame.freetype
 
 logger = logging.getLogger(__name__)
 
@@ -61,22 +61,8 @@ class PyGameTextRenderer(TextRenderingMixin):
 
         super().__init__(**kwargs)
 
-        self.font_file = font_file
-        self.font_size = font_size
-        self.font_color = font_color
-        self.background_color = background_color
+        raise NotImplemented('This funciton is deleted by Yintao')
 
-        self.pixels_per_patch = pixels_per_patch
-        self.max_seq_length = max_seq_length
-        self.pad_size = pad_size
-        self.pad_left, self.pad_right, self.pad_top, self.pad_bottom = (pad_size, pad_size, pad_size, pad_size)
-
-        self.dpi = dpi
-        pygame.freetype.init()
-        pygame.freetype.set_default_resolution(dpi)
-
-        self.font = None
-        self.load_font()
 
     @property
     def max_pixels_len(self):
@@ -131,20 +117,10 @@ class PyGameTextRenderer(TextRenderingMixin):
             self.max_pixels_len - self.pixels_per_patch,
         )
 
-    def _get_empty_surface(self) -> pygame.Surface:
-        """
-        Create and return an empty surface that we will later render the text to
+    def _get_empty_surface(self):
+        raise NotImplemented('This funciton is deleted by Yintao')
 
-        Returns:
-            The blank surface of type (`~pygame.Surface`)
-        """
-
-        frame = (self.max_pixels_len, self.pixels_per_patch)
-        surface = pygame.Surface(frame)
-        surface.fill(pygame.color.THECOLORS[self.background_color])
-        return surface
-
-    def _draw_black_patch(self, offset: int, surface: pygame.Surface) -> pygame.Surface:
+    def _draw_black_patch(self, offset: int, surface: None) -> None:
         """
         Draws a black separator patch on a surface a horizontal offset, i.e. the black patch begins <offset> pixels to
         the right from the beginning of the surface
@@ -159,14 +135,12 @@ class PyGameTextRenderer(TextRenderingMixin):
             A surface of type `~pygame.Surface` with the black patch drawn on it
 
         """
+        raise NotImplemented('This funciton is deleted by Yintao')
 
-        sep_rect = pygame.Rect(offset, 0, self.pixels_per_patch, self.pixels_per_patch)
-        pygame.draw.rect(surface, self.font.fgcolor, sep_rect)
-        return surface
 
     def _render_single_word(
-        self, word: str, offset: int, surface: pygame.Surface, is_last: bool = False
-    ) -> Tuple[pygame.Surface, int]:
+        self, word: str, offset: int, surface: None, is_last: bool = False
+    ) -> Tuple[None, int]:
         """
         Renders a single word to a surface with a horizontal offset, i.e. the rendered
         word begins <offset> pixels to the right from the beginning of the surface, and centers the rendered
@@ -188,28 +162,12 @@ class PyGameTextRenderer(TextRenderingMixin):
             A tuple containing the surface of type `~pygame.Surface` with the sentence rendered to it and the offset
             to where the next patch begins, type `int`
         """
+        raise NotImplemented('This funciton is deleted by Yintao')
 
-        text_surface, rect = self.font.render(word, self.font.fgcolor)
-        rect.left = offset
-
-        # Align words vertically based on how far they extend above the middle of the patch
-        # This is necessary because words can have the same rendered height but different vertical placements
-        # based on the combination of letters. E.g., "queue" mostly extends towards bottom whereas "look"
-        # extends towards the top
-        delta_top = self.pixels_per_patch / 2 - rect.top
-        rect.top = self.pad_top + delta_top
-
-        surface.blit(text_surface, rect)
-
-        if is_last:
-            offset += 2
-        offset = self._get_offset_to_next_patch(offset + rect.width)
-
-        return surface, offset
 
     def _render_single_sentence(
-        self, sentence: str, offset: int, surface: pygame.Surface
-    ) -> Tuple[pygame.Surface, int]:
+        self, sentence: str, offset: int, surface: None
+    ) -> Tuple[None, int]:
         """
         Renders a single sentence to a surface with a horizontal offset, i.e. the rendered
         sentence begins <offset> pixels to the right from the beginning of the surface, and centers the rendered
@@ -227,11 +185,8 @@ class PyGameTextRenderer(TextRenderingMixin):
             A tuple containing the surface of type `~pygame.Surface` with the sentence rendered to it and the width
             of the rendered sentence, type `int`
         """
-        text_surface, rect = self.font.render(sentence, self.font.fgcolor)
-        rect.midleft = (offset, surface.get_height() / 2)
-        surface.blit(text_surface, rect)
+        raise NotImplemented('This funciton is deleted by Yintao')
 
-        return surface, rect.width
 
     def _render_words_to_surface(self, words: List[str]) -> Encoding:
         """
@@ -374,7 +329,7 @@ class PyGameTextRenderer(TextRenderingMixin):
         return encoding
 
     @staticmethod
-    def get_image_from_surface(surface: pygame.Surface) -> np.ndarray:
+    def get_image_from_surface(surface: None) -> np.ndarray:
         """
         Transforms a surface containing a rendered image into a numpy image
 
@@ -386,11 +341,8 @@ class PyGameTextRenderer(TextRenderingMixin):
             An image of type `np.ndarray` of size [self.pixels_per_patch, self.max_pixels_len]
         """
 
-        image = pygame.surfarray.pixels3d(surface)
-        image = image.swapaxes(0, 1)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        raise NotImplemented('This funciton is deleted by Yintao')
 
-        return image
 
     def __call__(
         self,
@@ -431,9 +383,5 @@ class PyGameTextRenderer(TextRenderingMixin):
         Loads the font from specified font file with specified font size and color.
         """
 
-        logger.info(f"Loading font from {self.font_file}")
-        font = pygame.freetype.Font(self.font_file, self.font_size)
-        font.style = pygame.freetype.STYLE_NORMAL
-        font.fgcolor = pygame.color.THECOLORS[self.font_color]
+        raise NotImplemented('This funciton is deleted by Yintao')
 
-        self.font = font
