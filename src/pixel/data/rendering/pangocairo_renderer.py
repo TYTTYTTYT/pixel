@@ -95,6 +95,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         self.load_font()
 
         self.PANGO_SCALE = 1024
+        self.eos = True
 
     @property
     def max_pixels_len(self):
@@ -1065,6 +1066,9 @@ class PangoCairoTextRenderer(TextRenderingMixin):
 
         num_text_patches = self.px2patch_floor(eos_patch_offset)
 
+        if not self.eos:
+            sep_patches = []
+    
         encoding = Encoding(
             pixel_values=self.get_image_from_surface(surface, sep_patches=sep_patches),
             sep_patches=sep_patches,
