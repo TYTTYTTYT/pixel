@@ -1321,6 +1321,14 @@ class PIXELForPreTraining(PIXELPreTrainedModel):
 
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
+    
+    def unnormalize_pred(self, imgs: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
+        if self.config.norm_pix_loss:
+            target = self.patchify(imgs)
+            mean = target.mean(dim=-1, keepdim=True)
+            var = target.var(dim=-1, keepdim=True)
+            pred = pred * (var + 1.0e-6) ** 0.5 + mean
+            return pred
 
     def forward(
         self,

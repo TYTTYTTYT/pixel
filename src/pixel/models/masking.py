@@ -108,7 +108,7 @@ class SpanMaskingGenerator:
 
     def __call__(self, num_text_patches: int):
         # Start with an empty mask
-        mask = np.zeros(shape=self.num_patches, dtype=np.int)
+        mask = np.zeros(shape=self.num_patches, dtype=int)
 
         self.num_text_patches = num_text_patches
 
