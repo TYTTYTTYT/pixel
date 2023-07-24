@@ -1312,6 +1312,7 @@ class PIXELForPreTraining(PIXELPreTrainedModel):
         """
         target = self.patchify(imgs)
         if self.config.norm_pix_loss:
+            raise NotImplementedError('Do not use this loss')
             mean = target.mean(dim=-1, keepdim=True)
             var = target.var(dim=-1, keepdim=True)
             target = (target - mean) / (var + 1.0e-6) ** 0.5
@@ -1323,6 +1324,8 @@ class PIXELForPreTraining(PIXELPreTrainedModel):
         return loss
     
     def unnormalize_pred(self, imgs: torch.Tensor, pred: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError('Do not use this function')
+
         if self.config.norm_pix_loss:
             target = self.patchify(imgs)
             mean = target.mean(dim=-1, keepdim=True)
