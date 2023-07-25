@@ -554,7 +554,7 @@ class PIXELEmbeddings(nn.Module):
             embed_dim=config.hidden_size,
         )
         self.num_patches = self.patch_embeddings.num_patches
-        self.gen_mode = False
+        self.forward_mode = 'unset'
         # fixed sin-cos embedding
         self.position_embeddings = nn.Parameter(
             torch.zeros(1, self.num_patches + 1, config.hidden_size), requires_grad=False
@@ -644,8 +644,8 @@ class PIXELEmbeddings(nn.Module):
     
     def generative_masking(self, sequence: torch.Tensor, attention_mask: torch.Tensor, patch_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         batch_size, seq_length, dim = sequence.shape
-
-        len_keep = int(seq_length - patch_mask.sum())
+        assert patch_mask.dim() == 2
+        len_keep = int(seq_length - patch_mask[0].sum())
         print(f'generative {len_keep}')
 
         # We keep the interface the same as in the original random_masking function above
@@ -670,11 +670,46 @@ class PIXELEmbeddings(nn.Module):
         mask = torch.gather(mask, dim=1, index=ids_restore)
 
         return sequence_masked, attention_mask_masked, mask, ids_restore
+    
+    def diffusion_masking(self, sequence: torch.Tensor, attention_mask: torch.Tensor, patch_mask: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        batch_size, seq_length, dim = sequence.shape
 
+        len_keep = int(seq_length)
+        print(f'diffusion {len_keep}')
+
+        # We keep the interface the same as in the original random_masking function above
+        # The only difference is that instead of random noise we use the predefined mask
+        # Sometimes the greedy span masking yields fewer masked patches than specified through mask_ratio
+        # We additionally mask out the difference between them randomly using noise in [0, 0.01]
+        noise = patch_mask + (torch.rand(batch_size, seq_length, device=sequence.device) / 100)  # noise in [0, 0.01)
+
+        # sort noise for each sample
+        ids_shuffle = torch.argsort(noise, dim=1)  # ascend: small is keep, large is remove
+        ids_restore = torch.argsort(ids_shuffle, dim=1)
+
+        # keep the first subset
+        ids_keep = ids_shuffle[:, :len_keep]
+        sequence_masked = torch.gather(sequence, dim=1, index=ids_keep.unsqueeze(-1).repeat(1, 1, dim))
+        attention_mask_masked = torch.gather(attention_mask, dim=1, index=ids_keep)
+
+        # generate the binary mask: 0 is keep, 1 is remove
+        mask = torch.ones([batch_size, seq_length], device=sequence.device)
+        mask[:, :len_keep] = 0
+        # unshuffle to get the binary mask
+        mask = torch.gather(mask, dim=1, index=ids_restore)
+
+        return sequence_masked, attention_mask_masked, mask, ids_restore
+    
     def forward(self, pixel_values, attention_mask=None, patch_mask=None):
-        if self.gen_mode:
-            return self.generative_forward(pixel_values, attention_mask, patch_mask)
-        return self.normal_forward(pixel_values, attention_mask, patch_mask)
+        match self.forward_mode:
+            case 'normal':
+                return self.normal_forward(pixel_values, attention_mask, patch_mask)
+            case 'gen':
+                return self.generative_forward(pixel_values, attention_mask, patch_mask)
+            case 'diffu':
+                return self.diffusion_forward(pixel_values, attention_mask, patch_mask)
+            case _:
+                raise KeyError(f'Unsupport forward mode for embedding layer {self.forward_mode}')
 
     def normal_forward(self, pixel_values, attention_mask=None, patch_mask=None):
         batch_size, num_channels, height, width = pixel_values.shape
@@ -710,6 +745,28 @@ class PIXELEmbeddings(nn.Module):
         print('in generative_f')
 
         embeddings, attention_mask, mask, ids_restore = self.generative_masking(
+            embeddings, attention_mask, patch_mask
+        )
+
+        # append cls token
+        cls_token = self.cls_token + self.position_embeddings[:, :1, :]
+        cls_tokens = cls_token.expand(embeddings.shape[0], -1, -1)
+        embeddings = torch.cat((cls_tokens, embeddings), dim=1)
+        attention_mask = torch.cat((torch.ones((batch_size, 1), device=attention_mask.device), attention_mask), dim=1)
+        
+        return embeddings, attention_mask, mask, ids_restore
+    
+    def diffusion_forward(self, pixel_values, attention_mask, patch_mask):
+        batch_size, num_channels, height, width = pixel_values.shape
+        embeddings = self.patch_embeddings(pixel_values)
+
+        # add position embeddings w/o cls token
+        embeddings = embeddings + self.position_embeddings[:, 1:, :]
+
+        # masking: length -> length - num_1_in_patch_mask
+        print('in diffusion_forward')
+
+        embeddings, attention_mask, mask, ids_restore = self.diffusion_masking(
             embeddings, attention_mask, patch_mask
         )
 
