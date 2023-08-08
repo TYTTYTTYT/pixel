@@ -646,7 +646,6 @@ class PIXELEmbeddings(nn.Module):
         batch_size, seq_length, dim = sequence.shape
         assert patch_mask.dim() == 2
         len_keep = int(seq_length - patch_mask[0].sum())
-        print(f'generative {len_keep}')
 
         # We keep the interface the same as in the original random_masking function above
         # The only difference is that instead of random noise we use the predefined mask
@@ -742,8 +741,6 @@ class PIXELEmbeddings(nn.Module):
         embeddings = embeddings + self.position_embeddings[:, 1:, :]
 
         # masking: length -> length - num_1_in_patch_mask
-        print('in generative_f')
-
         embeddings, attention_mask, mask, ids_restore = self.generative_masking(
             embeddings, attention_mask, patch_mask
         )
