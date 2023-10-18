@@ -71,6 +71,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         pixels_per_patch: int = DEFAULT_PPB,
         max_seq_length: int = MAX_SEQ_LENGTH,
         fallback_fonts_dir: Optional[str] = None,
+        patch_len: int = 1,
         **kwargs,
     ):
 
@@ -96,6 +97,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
 
         self.PANGO_SCALE = 1024
         self.eos = True
+        self.patch_len = patch_len
 
     @property
     def max_pixels_len(self):
@@ -184,8 +186,8 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         """
 
         return min(
-            math.ceil(x / self.pixels_per_patch) * self.pixels_per_patch,
-            self.max_pixels_len - self.pixels_per_patch,
+            math.ceil(x / self.pixels_per_patch / self.patch_len) * self.pixels_per_patch * self.patch_len,
+            self.max_pixels_len - self.pixels_per_patch * self.patch_len,
         )
 
     def _get_offset_to_previous_patch(self, x: int) -> int:
@@ -496,8 +498,12 @@ class PangoCairoTextRenderer(TextRenderingMixin):
                     else:
                         break
                 # print(f"New sentence = {new_sentence}, width = {self.px2patch_ceil(offset + width)} patches")
-
-        position = (offset, self.pixels_per_patch / 2.0 - height / 2.0 - 2)
+        if self.pixels_per_patch < 10:
+            shift = 1
+        else:
+            shift = 2
+            
+        position = (offset, self.pixels_per_patch / 2.0 - height / 2.0 - shift)
         context.move_to(*position)
 
         PangoCairo.show_layout(context, truncated_layout)
@@ -543,7 +549,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
             word_start_indices.append(math.ceil(offset / self.pixels_per_patch))
 
         # Draw black rectangle on surface as separator patch
-        sep_patches.append(offset)
+        sep_patches += self.get_eos_list(offset)
 
         num_text_patches = math.ceil(offset / self.pixels_per_patch)
 
@@ -608,9 +614,11 @@ class PangoCairoTextRenderer(TextRenderingMixin):
             )
         # Offset is left padding + rendered width of text_a + 2 (padding)
         offset = self._get_offset_to_next_patch(offset + text_a_width + 2)
+        offset_list = self.get_eos_list(offset)
 
         # Mark patch starting at offset as black separator patch
-        sep_patches.append(offset)
+        sep_patches += offset_list
+        offset = offset_list[-1]
 
         # # Add a 0 to sequence_ids for each patch in text_a and None for the separator patch
         sequence_ids.extend([0] * self.px2patch_floor(offset) + [None])
@@ -635,7 +643,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         eos_patch_offset = self._get_offset_to_next_patch(offset + text_b_width + 2)
 
         # Mark patch starting at offset as black separator patch
-        sep_patches.append(eos_patch_offset)
+        sep_patches += self.get_eos_list(eos_patch_offset)
 
         # # Add a 1 to sequence_ids for each patch in text_b and None for the separator patch
         b_patches = self.px2patch_floor(eos_patch_offset - offset)
@@ -1062,9 +1070,12 @@ class PangoCairoTextRenderer(TextRenderingMixin):
 
         # Offset is left padding + rendered width of first sentence + 2 (padding)
         eos_patch_offset = self._get_offset_to_next_patch(2 + text_width + 2)
-        sep_patches.append(eos_patch_offset)
+        # sep_patches.append(eos_patch_offset)
+        offset_list = self.get_eos_list(eos_patch_offset)
+        sep_patches += offset_list
 
-        num_text_patches = self.px2patch_floor(eos_patch_offset)
+        # num_text_patches = self.px2patch_floor(eos_patch_offset)
+        num_text_patches = self.px2patch_floor(offset_list[0])
 
         if not self.eos:
             sep_patches = []
@@ -1076,6 +1087,16 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         )
 
         return encoding
+    
+    def get_eos_list(self, offset: int) -> list[int]:
+        l = [offset]
+        for _ in range(self.patch_len - 1):
+            offset += self.pixels_per_patch
+            l.append(offset)
+        return l
+    
+    def get_next_long_patch_offset(self, x: int) -> int:
+        return math.ceil(x / self.pixels_per_patch / self.patch_len) * self.pixels_per_patch * self.patch_len
 
     def get_image_from_surface(self, surface: cairo.ImageSurface, sep_patches: List[int]) -> np.ndarray:
         """
