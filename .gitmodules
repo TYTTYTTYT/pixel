@@ -1,4 +1,0 @@
-[submodule "datasets"]
-	path = datasets
-	url = https://github.com/xplip/datasets.git
-	branch = pve
