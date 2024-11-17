@@ -1416,7 +1416,7 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         if isinstance(text, list):
             rendering_fn = self._render_words_to_surface
         elif isinstance(text, tuple):
-            if len(text) <= 2:
+            if len(text) == 2:
                 rendering_fn = self._render_text_pair_to_surface
             else:
                 rendering_fn = self._render_text_list_to_surface
