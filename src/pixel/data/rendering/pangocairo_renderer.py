@@ -766,6 +766,200 @@ class PangoCairoTextRenderer(TextRenderingMixin):
                 encoding.overflowing_patches = overflow_encodings
 
         return encoding
+    
+
+    def _render_text_list_to_surface_ltr(
+        self,
+        text_list: Tuple[str, str],
+        return_overflowing_patches: bool = False,
+        return_offset_mapping: bool = False,
+        stride: int = 0,
+        sent_max_len: Optional[int] = None,
+        **kwargs,
+    ) -> Encoding:
+        """
+        Renders a text pair left-to-right (LTR).
+
+        Args:
+            text_pair (`Tuple[str, str]`):
+                The text pair to be rendered
+            return_overflowing_patches (`bool`, *optional*, defaults to `False`):
+                Whether or not to return overflowing patch sequences.
+            return_offset_mapping (`bool`, *optional*, defaults to `False`):
+                Whether or not to return `(char_start, char_end)` for each patch.
+            stride (`int`, *optional*, defaults to 0):
+                If set to a number along with `max_length`, the overflowing patches returned when
+                `return_overflowing_patches=True` will contain some patches from the end of the truncated sequence
+                returned to provide some overlap between truncated and overflowing sequences. The value of this
+                argument defines the number of overlapping patches.
+            text_a_max_length (`int`, *optional*):
+                Maximum length (in image patches) of the first text in the text pair.
+            rtl (`bool`, *optional*, defaults to `False`):
+                Whether text is written in right-to-left (RTL) script. Note: If set to False, the renderer will detect
+                the text direction automatically, so the text can still be rendered RTL, depending on its content
+
+        Returns:
+            An Encoding of type `Encoding` containing the rendered text pair and metadata
+        """
+
+        # text_a, text_b = text_list[:2]
+
+        surface, context, sep_patches = self.get_empty_surface()
+        offset = 0
+        
+        def render_one_sentence(text: str, offset: int, context: cairo.Context, sep_patches: List[int], sent_max_len: int) -> Tuple[int, cairo.Context, List[int], int]:
+            offset += 2
+            
+            context, _, text_a_width = self._render_single_sentence(
+                text, offset, context, max_length=sent_max_len
+            )
+            eos_patch_offset = self._get_offset_to_next_patch(offset + text_a_width + 2)
+            sep_patches += self.get_eos_list(eos_patch_offset)
+            offset = sep_patches[-1] + self.pixels_per_patch
+            
+            return offset, context, sep_patches, eos_patch_offset
+        
+        for text in text_list:
+            offset, context, sep_patches, eos_patch_offset = render_one_sentence(text, offset, context, sep_patches, sent_max_len)
+
+        # ##################################################################################
+        # offset += 2
+        
+        # context, _, text_a_width = self._render_single_sentence(
+        #     text_a, offset, context, max_length=text_a_max_length
+        # )
+        # eos_patch_offset = self._get_offset_to_next_patch(offset + text_a_width + 2)
+        # sep_patches += self.get_eos_list(eos_patch_offset)
+        # offset = sep_patches[-1] + self.pixels_per_patch
+
+        # ##################################################################################
+        # offset += 2
+
+        # # Render second sentence and draw on surface
+        # context, _, text_b_width = self._render_single_sentence(text_b, offset, context)
+
+        # eos_patch_offset = self._get_offset_to_next_patch(offset + text_b_width + 2)
+        # sep_patches += self.get_eos_list(eos_patch_offset)
+        # offset = sep_patches[-1] + self.pixels_per_patch
+        # ##################################################################################
+
+        image = self.get_image_from_surface(surface, sep_patches=sep_patches)
+        num_text_patches = self.px2patch_floor(eos_patch_offset)
+        print(f'num_text_patches: {num_text_patches}')
+
+        encoding = Encoding(
+            pixel_values=image,
+            sep_patches=sep_patches,
+            num_text_patches=num_text_patches,
+            offset_mapping=None,
+            overflowing_patches=None,
+        )
+
+        # # Calculate how many patches / pixels of the overflow sequence are already filled by
+        # # text_a, the sep patch, padding, and the stride
+        # num_patches_filled = self.px2patch_floor(self._get_offset_to_next_patch(2 + text_a_width + 2)) + 1 + stride
+        # num_pixels_filled = self.patch2px(num_patches_filled)
+
+        # if return_overflowing_patches:
+
+        #     if not return_offset_mapping:
+        #         raise ValueError(
+        #             "The argument return_overflowing_patches=True requires that return_offset_mapping"
+        #             " is also set to True"
+        #         )
+        #     offset_mapping = text_b_offset_mapping
+
+        #     pixel_overflow = (offset + text_b_width) - (self.max_pixels_len - self.pixels_per_patch)
+        #     patch_overflow = self.px2patch_ceil(pixel_overflow)
+
+        #     if pixel_overflow > 0:
+        #         # Determine how many additional sequences we need to generate
+        #         max_num_additional_sequences = math.ceil(
+        #             pixel_overflow
+        #             / (
+        #                 self.max_pixels_len
+        #                 - self.pixels_per_patch
+        #                 - (
+        #                     self._get_offset_to_next_patch(2 + text_a_width + 2)
+        #                     + self.pixels_per_patch
+        #                     + stride * self.pixels_per_patch
+        #                 )
+        #             )
+        #         )
+
+        #         overflow_encodings = []
+        #         for i in range(max_num_additional_sequences):
+
+        #             # By shifting the continuation in each overflowing sequence to the left by some small amount
+        #             # it can happen that there is actually less overflow than initially calculated, potentially even
+        #             # requiring fewer additional sequences.
+        #             if pixel_overflow <= 0:
+        #                 break
+
+        #             # Start a new surface for the overflow sequence
+        #             o_surface, o_context, o_sep_patches = self.get_empty_surface()
+
+        #             text_remainder = text_b[offset_mapping[-patch_overflow - stride][0] :]
+
+        #             continuation_starting_point = (
+        #                 self._get_offset_to_next_patch(2 + text_a_width + 2) + self.pixels_per_patch + 2
+        #             )
+
+        #             # Render only the continuation (i.e., the part that is new in this overflow sequence and the stride)
+        #             # onto the surface for now. The text_a content gets copied over later
+        #             o_context, (o_full_layout, o_truncated_layout), o_text_width = self._render_single_sentence(
+        #                 text_remainder, continuation_starting_point, o_context
+        #             )
+
+        #             # Remember where to put SEP patch
+        #             o_eos_offset = self._get_offset_to_next_patch(continuation_starting_point + o_text_width + 2)
+        #             o_sep_patches.append(o_eos_offset)
+
+        #             # Determine the real (i.e., excluding additional overflow) rendered width of the continuation
+        #             # to find its starting and end points in the offset_mapping
+        #             rendered_width_real = min(
+        #                 2 + o_text_width,
+        #                 self.max_pixels_len - self.pixels_per_patch - continuation_starting_point,
+        #             )
+
+        #             continuation_start_letter = -patch_overflow - stride
+        #             continuation_end_letter = -patch_overflow + self.px2patch_floor(rendered_width_real)
+        #             if continuation_end_letter > -1:
+        #                 continuation_end_letter = None
+
+        #             o_offset_mapping = offset_mapping[continuation_start_letter:continuation_end_letter]
+
+        #             # Calculate overflow again for (potential) subsequent overflow sequence
+        #             pixel_overflow = (continuation_starting_point + o_text_width) - (
+        #                 self.max_pixels_len - self.pixels_per_patch
+        #             )
+        #             patch_overflow = self.px2patch_ceil(pixel_overflow)
+
+        #             num_text_patches = self.px2patch_floor(o_eos_offset)
+
+        #             # Take original image or previous overflow sequence image to copy data from
+        #             previous_image = image
+        #             image = self.get_image_from_surface(o_surface, sep_patches=[sep_patches[0]] + o_sep_patches)
+
+        #             # Copy [text_a, sep patch, padding] content from previous image
+        #             image[:, : num_pixels_filled - self.patch2px(stride)] = previous_image[
+        #                 :, : num_pixels_filled - self.patch2px(stride)
+        #             ]
+
+        #             o_offset_mapping = text_a_offset_mapping + [(0, 0)] + o_offset_mapping
+        #             o_offset_mapping = self.pad_or_truncate_offset_mapping(o_offset_mapping)
+
+        #             overflow_encodings.append(
+        #                 Encoding(
+        #                     pixel_values=image,
+        #                     sep_patches=sep_patches + o_sep_patches,
+        #                     num_text_patches=num_text_patches,
+        #                     offset_mapping=o_offset_mapping,
+        #                 )
+        #             )
+        #         encoding.overflowing_patches = overflow_encodings
+
+        return encoding
 
     def _render_text_pair_to_surface_rtl(
         self,
@@ -1039,6 +1233,64 @@ class PangoCairoTextRenderer(TextRenderingMixin):
             text_a_max_length=text_a_max_length,
             **kwargs,
         )
+        
+    def _render_text_list_to_surface(
+        self,
+        text_list: Tuple[str, str],
+        return_overflowing_patches: bool = False,
+        return_offset_mapping: bool = False,
+        stride: int = 0,
+        text_a_max_length: Optional[int] = None,
+        rtl: bool = False,
+        **kwargs,
+    ) -> Encoding:
+        """
+        Renders a list of sentences or paragraphs to a surface and keeps track of
+        how many patches in the rendered surface contain text, i.e. are neither blank nor black separator patches
+
+        Args:
+            text_list (`Tuple[str, str]`):
+                The text pair to be rendered
+            return_overflowing_patches (`bool`, *optional*, defaults to `False`):
+                Whether or not to return overflowing patch sequences.
+            return_offset_mapping (`bool`, *optional*, defaults to `False`):
+                Whether or not to return `(char_start, char_end)` for each patch.
+            stride (`int`, *optional*, defaults to 0):
+                If set to a number along with `max_length`, the overflowing patches returned when
+                `return_overflowing_patches=True` will contain some patches from the end of the truncated sequence
+                returned to provide some overlap between truncated and overflowing sequences. The value of this
+                argument defines the number of overlapping patches.
+            text_a_max_length (`int`, *optional*):
+                Maximum length (in image patches) of the first text in the text pair.
+            rtl (`bool`, *optional*, defaults to `False`):
+                Whether text is written in right-to-left (RTL) script. Note: If set to False, the renderer will detect
+                the text direction automatically, so the text can still be rendered RTL, depending on its content
+
+        Returns:
+            An Encoding of type `Encoding` containing the rendered text pair and metadata
+        """
+
+        # Clean texts
+        text_list = [t.replace("\n", " ") for t in text_list]
+        
+        # Check whether text is written in a right-to-left script
+        rtl = False
+        for t in text_list:
+            if self.is_rtl(t):
+                rtl = True
+        if rtl:
+            raise NotImplementedError(f'Does not support right-to-left language while rendering text lists!')
+
+        rendering_fn = self._render_text_list_to_surface_ltr
+
+        return rendering_fn(
+            text_list=text_list,
+            return_overflowing_patches=return_overflowing_patches,
+            return_offset_mapping=return_offset_mapping,
+            stride=stride,
+            text_a_max_length=text_a_max_length,
+            **kwargs,
+        )
 
     def _render_text_to_surface(
         self,
@@ -1164,7 +1416,10 @@ class PangoCairoTextRenderer(TextRenderingMixin):
         if isinstance(text, list):
             rendering_fn = self._render_words_to_surface
         elif isinstance(text, tuple):
-            rendering_fn = self._render_text_pair_to_surface
+            if len(text) <= 2:
+                rendering_fn = self._render_text_pair_to_surface
+            else:
+                rendering_fn = self._render_text_list_to_surface
         elif isinstance(text, str):
             rendering_fn = self._render_text_to_surface
         else:
